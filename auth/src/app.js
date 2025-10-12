@@ -6,9 +6,11 @@ import winston from "winston";
 import LokiTransport from "winston-loki";
 import authRoutes from "./routes/auth.route.js";
 import { asyncHandler, ApiResponse } from "winston-asynchandler";
+import connectDB from "./utils/db.js";
+import cookieparser from "cookie-parser";
 
 const app = express();
-
+await connectDB();
 const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",");
 const corsOptions = {
   origin: function (origin, callback) {
@@ -19,6 +21,8 @@ const corsOptions = {
   credentials: true,
   maxAge: 86400,
 };
+app.use(cookieparser());
+app.set("trust proxy", true);
 app.use(express.json());
 app.use(cors(corsOptions));
 
