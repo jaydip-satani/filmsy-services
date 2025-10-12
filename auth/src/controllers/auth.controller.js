@@ -10,9 +10,10 @@ import {
 import { generateVerificationToken } from "../utils/generateVerificationToken.js";
 import { getClientIp } from "../utils/ip.js";
 import UserIP from "../models/userIp.model.js";
-import UserDevice from "../models/UserDevice.model.js";
+import UserDevice from "../models/userDevice.model.js";
 import FailedLogin from "../models/failedLogin.model.js";
 import { getUserDevice } from "../utils/getUserDevice.js";
+import crypto from "crypto";
 
 export const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
@@ -22,7 +23,7 @@ export const registerUser = asyncHandler(async (req, res) => {
 
   const existingUser = await User.findOne({ email });
   if (existingUser) throw new ApiError(409, "User already exists");
-  const { hashedToken, tokenExpiry } = generateVerificationToken();
+  const { token, hashedToken, tokenExpiry } = generateVerificationToken();
 
   const user = await User.create({
     name,
@@ -38,7 +39,7 @@ export const registerUser = asyncHandler(async (req, res) => {
     subject: "Verify your email",
     mailGenContent: emailVerificationMailGenContent(
       name,
-      `${process.env.BASE_URL}/api/auth/verifyEmail/${hashedToken}`
+      `${process.env.BASE_URL}/api/auth/verifyEmail/${token}`
     ),
   });
 
@@ -52,7 +53,11 @@ export const registerUser = asyncHandler(async (req, res) => {
 export const verifyEmail = asyncHandler(async (req, res) => {
   const { token } = req.params;
 
-  const user = await User.findOne({ emailVerificationToken: token });
+  if (!token) throw new ApiError(400, "Token required");
+
+  const hashed = crypto.createHash("sha256").update(token).digest("hex");
+
+  const user = await User.findOne({ emailVerificationToken: hashed });
 
   if (!user) throw new ApiError(400, "Invalid token");
   if (user.userVerified)
@@ -147,7 +152,7 @@ export const loginUser = asyncHandler(async (req, res) => {
 
   await UserDevice.create({
     user: user._id,
-    device: userAgent,
+    deviceData: userAgent,
     loginAt: new Date(),
   });
 
@@ -198,12 +203,12 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({ email });
   if (!user) throw new ApiError(404, "User not found");
-  const { hashedToken, tokenExpiry } = generateVerificationToken();
+  const { token, hashedToken, tokenExpiry } = generateVerificationToken();
   user.passwordResetToken = hashedToken;
   user.passwordResetExpiry = tokenExpiry;
   await user.save();
 
-  const resetUrl = `${process.env.BASE_URL}/api/auth/reset-password/${hashedToken}`;
+  const resetUrl = `${process.env.BASE_URL}/api/auth/reset-password/${token}`;
 
   await sendMail({
     email,
@@ -224,8 +229,10 @@ export const resetPassword = asyncHandler(async (req, res) => {
   if (newPassword !== confirmPassword)
     throw new ApiError(400, "Passwords do not match");
 
+  const hashed = crypto.createHash("sha256").update(token).digest("hex");
+
   const user = await User.findOne({
-    passwordResetToken: token,
+    passwordResetToken: hashed,
     passwordResetExpiry: { $gt: Date.now() },
   });
 
@@ -274,7 +281,7 @@ export const resendVerificationEmail = asyncHandler(async (req, res) => {
 
   if (user.userVerified) throw new ApiError(400, "User already verified");
 
-  const { hashedToken, tokenExpiry } = generateVerificationToken();
+  const { token, hashedToken, tokenExpiry } = generateVerificationToken();
   user.emailVerificationToken = hashedToken;
   user.emailVerificationExpiry = tokenExpiry;
   await user.save();
@@ -283,7 +290,7 @@ export const resendVerificationEmail = asyncHandler(async (req, res) => {
     subject: "Email Verification",
     mailGenContent: emailVerificationMailGenContent(
       email,
-      `${process.env.BASE_URL}/api/auth/verifyEmail/${hashedToken}`
+      `${process.env.BASE_URL}/api/auth/verifyEmail/${token}`
     ),
   });
 

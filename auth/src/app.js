@@ -4,6 +4,7 @@ import cors from "cors";
 import promClient from "prom-client";
 import winston from "winston";
 import LokiTransport from "winston-loki";
+import helmet from "helmet";
 import authRoutes from "./routes/auth.route.js";
 import { asyncHandler, ApiResponse } from "winston-asynchandler";
 import connectDB from "./utils/db.js";
@@ -22,31 +23,38 @@ const corsOptions = {
   maxAge: 86400,
 };
 app.use(cookieparser());
+app.use(helmet());
 app.set("trust proxy", true);
-app.use(express.json());
+// limit JSON body size to mitigate large payload attacks
+app.use(express.json({ limit: "10kb" }));
 app.use(cors(corsOptions));
 
-const logger = winston.createLogger({
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.timestamp(),
-        winston.format.printf(
-          ({ timestamp, level, message }) =>
-            `[${timestamp}] ${level}: ${message}`
-        )
-      ),
-    }),
+const loggerTransports = [
+  new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.timestamp(),
+      winston.format.printf(
+        ({ timestamp, level, message }) => `[${timestamp}] ${level}: ${message}`
+      )
+    ),
+  }),
+];
+
+// Add Loki transport only when LOKI_URL is provided
+if (process.env.LOKI_URL) {
+  loggerTransports.push(
     new LokiTransport({
       host: process.env.LOKI_URL, // e.g. http://loki:3100
       labels: { service: "auth-service" },
       json: true,
       batching: true,
       interval: 5,
-    }),
-  ],
-});
+    })
+  );
+}
+
+const logger = winston.createLogger({ transports: loggerTransports });
 
 logger.info("🚀 Logger initialized with Loki transport");
 
@@ -78,6 +86,14 @@ app.get(
   })
 );
 app.get("/metrics", async (req, res) => {
+  // If METRICS_AUTH_TOKEN is set, require a header x-metrics-token to match
+  if (process.env.METRICS_AUTH_TOKEN) {
+    const token = req.headers["x-metrics-token"];
+    if (!token || token !== process.env.METRICS_AUTH_TOKEN) {
+      return res.status(401).end("Unauthorized");
+    }
+  }
+
   try {
     res.set("Content-Type", promClient.register.contentType);
     res.end(await promClient.register.metrics());
