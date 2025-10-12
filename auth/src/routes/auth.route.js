@@ -19,6 +19,7 @@ import {
   authLimiter,
   loginLimiter,
 } from "../middleware/rateLimit.middleware.js";
+import { handleValidation } from "../middleware/validation.middleware.js";
 
 const router = express.Router();
 
@@ -28,6 +29,7 @@ router.post(
   body("name").isString().isLength({ min: 2, max: 100 }).trim(),
   body("email").isEmail().normalizeEmail(),
   body("password").isLength({ min: 8 }),
+  handleValidation,
   registerUser
 );
 
@@ -36,6 +38,7 @@ router.post(
   loginLimiter,
   body("email").isEmail().normalizeEmail(),
   body("password").isString().isLength({ min: 8 }),
+  handleValidation,
   loginUser
 );
 
@@ -46,12 +49,14 @@ router.post("/logout", authMiddleware, logoutUser);
 router.get(
   "/verifyEmail/:token",
   param("token").isString().isLength({ min: 10 }),
+  handleValidation,
   verifyEmail
 );
 router.post(
   "/resend-verification",
   authLimiter,
   body("email").isEmail().normalizeEmail(),
+  handleValidation,
   resendVerificationEmail
 );
 
@@ -59,6 +64,7 @@ router.post(
   "/forgot-password",
   authLimiter,
   body("email").isEmail().normalizeEmail(),
+  handleValidation,
   forgotPassword
 );
 
@@ -68,6 +74,7 @@ router.post(
   param("token").isString().isLength({ min: 10 }),
   body("newPassword").isLength({ min: 8 }),
   body("confirmPassword").isLength({ min: 8 }),
+  handleValidation,
   resetPassword
 );
 
@@ -76,6 +83,7 @@ router.put(
   "/profile",
   authMiddleware,
   body("name").isString().isLength({ min: 2, max: 100 }).trim(),
+  handleValidation,
   updateProfile
 );
 router.get("/me/:id", authMiddleware, getUserById);
