@@ -24,7 +24,7 @@ const corsOptions = {
 };
 app.use(cookieparser());
 app.use(helmet());
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 // limit JSON body size to mitigate large payload attacks
 app.use(express.json({ limit: "10kb" }));
 app.use(cors(corsOptions));
