@@ -25,7 +25,6 @@ const corsOptions = {
 app.use(cookieparser());
 app.use(helmet());
 app.set("trust proxy", 1);
-// limit JSON body size to mitigate large payload attacks
 app.use(express.json({ limit: "10kb" }));
 app.use(cors(corsOptions));
 
@@ -41,15 +40,21 @@ const loggerTransports = [
   }),
 ];
 
-// Add Loki transport only when LOKI_URL is provided
 if (process.env.LOKI_URL) {
   loggerTransports.push(
     new LokiTransport({
       host: process.env.LOKI_URL, // e.g. http://loki:3100
-      labels: { service: "auth-service" },
+      labels: {
+        service: process.env.SERVICE_NAME || "auth-service",
+        instance: process.env.HOSTNAME || "local",
+      },
       json: true,
       batching: true,
       interval: 5,
+      basicAuth:
+        process.env.LOKI_USERNAME && process.env.LOKI_PASSWORD
+          ? `${process.env.LOKI_USERNAME}:${process.env.LOKI_PASSWORD}`
+          : undefined,
     })
   );
 }
@@ -58,19 +63,28 @@ const logger = winston.createLogger({ transports: loggerTransports });
 
 logger.info("🚀 Logger initialized with Loki transport");
 
+// Prometheus metrics setup with service-level labels for microservices scraping
 const collectDefaultMetrics = promClient.collectDefaultMetrics;
-collectDefaultMetrics({ prefix: "auth_service_" });
+collectDefaultMetrics({
+  labels: {
+    service: process.env.SERVICE_NAME || "auth-service",
+    instance: process.env.HOSTNAME || "local",
+  },
+  prefix: `${process.env.SERVICE_NAME || "auth_service"}_`,
+});
 
 const httpRequestDuration = new promClient.Histogram({
   name: "http_request_duration_seconds",
   help: "Duration of HTTP requests in seconds",
-  labelNames: ["method", "route", "status_code"],
+  labelNames: ["service", "instance", "method", "route", "status_code"],
 });
 
 app.use((req, res, next) => {
   const end = httpRequestDuration.startTimer();
   res.on("finish", () => {
     end({
+      service: process.env.SERVICE_NAME || "auth-service",
+      instance: process.env.HOSTNAME || "local",
       method: req.method,
       route: req.originalUrl,
       status_code: res.statusCode,
@@ -85,10 +99,13 @@ app.get(
     res.status(200).json(ApiResponse(200, Date.now()));
   })
 );
+// Expose metrics at root-level /metrics for Prometheus scraping and microservice aggregation
 app.get("/metrics", async (req, res) => {
-  // If METRICS_AUTH_TOKEN is set, require a header x-metrics-token to match
+  // Optional protection: require METRICS_AUTH_TOKEN header when set
   if (process.env.METRICS_AUTH_TOKEN) {
-    const token = req.headers["x-metrics-token"];
+    const token =
+      req.headers["x-metrics-token"] ||
+      req.headers["authorization"]?.replace(/^Bearer\s+/, "");
     if (!token || token !== process.env.METRICS_AUTH_TOKEN) {
       return res.status(401).end("Unauthorized");
     }
