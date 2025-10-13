@@ -6,9 +6,10 @@ import winston from "winston";
 import LokiTransport from "winston-loki";
 import helmet from "helmet";
 import authRoutes from "./routes/auth.route.js";
-import { asyncHandler, ApiResponse } from "winston-asynchandler";
 import connectDB from "./utils/db.js";
 import cookieparser from "cookie-parser";
+import { asyncHandler } from "./utils/asynchandler.js";
+import { ApiResponse } from "./utils/apiResponse.js";
 
 const app = express();
 await connectDB();
@@ -45,7 +46,7 @@ if (process.env.LOKI_URL) {
     new LokiTransport({
       host: process.env.LOKI_URL, // e.g. http://loki:3100
       labels: {
-        service: process.env.SERVICE_NAME || "auth-service",
+        service: process.env.SERVICE_NAME || "auth_service",
         instance: process.env.HOSTNAME || "local",
       },
       json: true,
@@ -67,7 +68,7 @@ logger.info("🚀 Logger initialized with Loki transport");
 const collectDefaultMetrics = promClient.collectDefaultMetrics;
 collectDefaultMetrics({
   labels: {
-    service: process.env.SERVICE_NAME || "auth-service",
+    service: process.env.SERVICE_NAME || "auth_service",
     instance: process.env.HOSTNAME || "local",
   },
   prefix: `${process.env.SERVICE_NAME || "auth_service"}_`,
@@ -83,7 +84,7 @@ app.use((req, res, next) => {
   const end = httpRequestDuration.startTimer();
   res.on("finish", () => {
     end({
-      service: process.env.SERVICE_NAME || "auth-service",
+      service: process.env.SERVICE_NAME || "auth_service",
       instance: process.env.HOSTNAME || "local",
       method: req.method,
       route: req.originalUrl,

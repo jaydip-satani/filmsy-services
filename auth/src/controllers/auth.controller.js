@@ -1,7 +1,6 @@
 import { User } from "../models/user.model.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { asyncHandler, ApiError, ApiResponse } from "winston-asynchandler";
 import {
   sendMail,
   emailVerificationMailGenContent,
@@ -14,6 +13,9 @@ import UserDevice from "../models/userDevice.model.js";
 import FailedLogin from "../models/failedLogin.model.js";
 import { getUserDevice } from "../utils/getUserDevice.js";
 import crypto from "crypto";
+import { asyncHandler } from "../utils/asynchandler.js";
+import { ApiResponse } from "../utils/apiResponse.js";
+import { ApiError } from "../utils/apiError.js";
 
 export const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
@@ -84,7 +86,7 @@ export const loginUser = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email });
   if (!user) {
     await FailedLogin.create({
-      email,
+      email: email,
       ip: clientIp,
       device: userAgent,
       reason: "User not found",
@@ -97,7 +99,7 @@ export const loginUser = asyncHandler(async (req, res) => {
       (user.accountLockedUntil.getTime() - Date.now()) / 60000
     );
     await FailedLogin.create({
-      email,
+      email: email,
       ip: clientIp,
       device: userAgent,
       reason: `Account locked for ${minutesLeft} more minute(s)`,
@@ -121,6 +123,7 @@ export const loginUser = asyncHandler(async (req, res) => {
 
     await FailedLogin.create({
       user: user._id,
+      email: user.email,
       ip: clientIp,
       device: userAgent,
       reason: "Incorrect password",
@@ -334,10 +337,12 @@ export const getLoginHistory = asyncHandler(async (req, res) => {
 });
 export const failedLoginAttempts = asyncHandler(async (req, res) => {
   const user = req.user?.email;
+  console.log(user);
   if (!user) throw new ApiError(400, "User email not found");
   const attempts = await FailedLogin.find({ email: user }).sort({
     attemptedAt: -1,
   });
+  console.log(attempts);
 
   res
     .status(200)

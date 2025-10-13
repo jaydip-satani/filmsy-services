@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
-import { ApiResponse, asyncHandler } from "winston-asynchandler";
 import { User } from "../models/user.model.js";
+import { asyncHandler } from "../utils/asynchandler.js";
+import { ApiResponse } from "../utils/apiResponse.js";
 
 export const authMiddleware = asyncHandler(async (req, res, next) => {
   const token = req.cookies?.authToken;
