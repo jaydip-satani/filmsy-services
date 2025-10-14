@@ -2,6 +2,10 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import promClient from "prom-client";
+import {
+  client as promClientInstance,
+  httpRequestDuration,
+} from "./utils/metrics.js";
 import winston from "winston";
 import LokiTransport from "winston-loki";
 import helmet from "helmet";
@@ -64,22 +68,7 @@ const logger = winston.createLogger({ transports: loggerTransports });
 
 logger.info("🚀 Logger initialized with Loki transport");
 
-// Prometheus metrics setup with service-level labels for microservices scraping
-const collectDefaultMetrics = promClient.collectDefaultMetrics;
-collectDefaultMetrics({
-  labels: {
-    service: process.env.SERVICE_NAME || "auth_service",
-    instance: process.env.HOSTNAME || "local",
-  },
-  prefix: `${process.env.SERVICE_NAME || "auth_service"}_`,
-});
-
-const httpRequestDuration = new promClient.Histogram({
-  name: "http_request_duration_seconds",
-  help: "Duration of HTTP requests in seconds",
-  labelNames: ["service", "instance", "method", "route", "status_code"],
-});
-
+// use centralized httpRequestDuration from utils/metrics.js
 app.use((req, res, next) => {
   const end = httpRequestDuration.startTimer();
   res.on("finish", () => {

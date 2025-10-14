@@ -16,12 +16,15 @@ import crypto from "crypto";
 import { asyncHandler } from "../utils/asynchandler.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { ApiError } from "../utils/apiError.js";
+import { authCounter } from "../utils/metrics.js";
 
 export const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
-  if (!name || !email || !password)
+  if (!name || !email || !password) {
+    authCounter.inc({ event: "register", status: "failure" }, 1);
     throw new ApiError(400, "All fields are required");
+  }
 
   const existingUser = await User.findOne({ email });
   if (existingUser) throw new ApiError(409, "User already exists");
@@ -50,18 +53,26 @@ export const registerUser = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(201, "User registered successfully", { userId: user._id })
     );
+  // metric
+  authCounter.inc({ event: "register", status: "success" }, 1);
 });
 
 export const verifyEmail = asyncHandler(async (req, res) => {
   const { token } = req.params;
 
-  if (!token) throw new ApiError(400, "Token required");
+  if (!token) {
+    authCounter.inc({ event: "verify_email", status: "failure" }, 1);
+    throw new ApiError(400, "Token required");
+  }
 
   const hashed = crypto.createHash("sha256").update(token).digest("hex");
 
   const user = await User.findOne({ emailVerificationToken: hashed });
 
-  if (!user) throw new ApiError(400, "Invalid token");
+  if (!user) {
+    authCounter.inc({ event: "verify_email", status: "failure" }, 1);
+    throw new ApiError(400, "Invalid token");
+  }
   if (user.userVerified)
     return res.status(200).json(new ApiResponse(200, "Already verified"));
 
@@ -74,14 +85,17 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   await user.save();
 
   res.status(200).json(new ApiResponse(200, "Email verified successfully"));
+  authCounter.inc({ event: "verify_email", status: "success" }, 1);
 });
 
 export const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const clientIp = getClientIp(req) || "unknown";
   const userAgent = getUserDevice(req);
-  if (!email || !password)
+  if (!email || !password) {
+    authCounter.inc({ event: "login", status: "failure" }, 1);
     throw new ApiError(400, "Email and password required");
+  }
 
   const user = await User.findOne({ email });
   if (!user) {
@@ -91,6 +105,7 @@ export const loginUser = asyncHandler(async (req, res) => {
       device: userAgent,
       reason: "User not found",
     });
+    authCounter.inc({ event: "login", status: "failure" }, 1);
     throw new ApiError(404, "User not found");
   }
 
@@ -104,14 +119,17 @@ export const loginUser = asyncHandler(async (req, res) => {
       device: userAgent,
       reason: `Account locked for ${minutesLeft} more minute(s)`,
     });
+    authCounter.inc({ event: "login", status: "failure" }, 1);
     throw new ApiError(
       403,
       `Account locked. Try again in ${minutesLeft} minute(s)`
     );
   }
 
-  if (!user.userVerified)
+  if (!user.userVerified) {
+    authCounter.inc({ event: "login", status: "failure" }, 1);
     throw new ApiError(401, "Please verify your email first");
+  }
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) {
@@ -138,7 +156,7 @@ export const loginUser = asyncHandler(async (req, res) => {
         }
       );
     }
-
+    authCounter.inc({ event: "login", status: "failure" }, 1);
     throw new ApiError(401, "Invalid credentials");
   }
 
@@ -182,11 +200,14 @@ export const loginUser = asyncHandler(async (req, res) => {
       },
     })
   );
+  // metric
+  authCounter.inc({ event: "login", status: "success" }, 1);
 });
 
 export const logoutUser = asyncHandler(async (req, res) => {
   res.clearCookie("authToken");
   res.status(200).json(new ApiResponse(200, "User logged out successfully"));
+  authCounter.inc({ event: "logout", status: "success" }, 1);
 });
 
 export const getUserById = asyncHandler(async (req, res) => {
@@ -202,10 +223,16 @@ export const getUserById = asyncHandler(async (req, res) => {
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
-  if (!email) throw new ApiError(400, "Email required");
+  if (!email) {
+    authCounter.inc({ event: "forgot_password", status: "failure" }, 1);
+    throw new ApiError(400, "Email required");
+  }
 
   const user = await User.findOne({ email });
-  if (!user) throw new ApiError(404, "User not found");
+  if (!user) {
+    authCounter.inc({ event: "forgot_password", status: "failure" }, 1);
+    throw new ApiError(404, "User not found");
+  }
   const { token, hashedToken, tokenExpiry } = generateVerificationToken();
   user.passwordResetToken = hashedToken;
   user.passwordResetExpiry = tokenExpiry;
@@ -220,17 +247,22 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   });
 
   res.status(200).json(new ApiResponse(200, "Password reset email sent"));
+  authCounter.inc({ event: "forgot_password", status: "success" }, 1);
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
   const token = req.params.token;
   const { newPassword, confirmPassword } = req.body;
 
-  if (!token || !newPassword || !confirmPassword)
+  if (!token || !newPassword || !confirmPassword) {
+    authCounter.inc({ event: "reset_password", status: "failure" }, 1);
     throw new ApiError(400, "All fields required");
+  }
 
-  if (newPassword !== confirmPassword)
+  if (newPassword !== confirmPassword) {
+    authCounter.inc({ event: "reset_password", status: "failure" }, 1);
     throw new ApiError(400, "Passwords do not match");
+  }
 
   const hashed = crypto.createHash("sha256").update(token).digest("hex");
 
@@ -239,7 +271,10 @@ export const resetPassword = asyncHandler(async (req, res) => {
     passwordResetExpiry: { $gt: Date.now() },
   });
 
-  if (!user) throw new ApiError(400, "Token is invalid or has expired");
+  if (!user) {
+    authCounter.inc({ event: "reset_password", status: "failure" }, 1);
+    throw new ApiError(400, "Token is invalid or has expired");
+  }
 
   user.password = newPassword;
   user.passwordResetToken = undefined;
@@ -248,25 +283,36 @@ export const resetPassword = asyncHandler(async (req, res) => {
   await user.save();
 
   res.status(200).json(new ApiResponse(200, "Password reset successfully"));
+  authCounter.inc({ event: "reset_password", status: "success" }, 1);
 });
 
 export const profile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user.id).select("-password");
-  if (!user) throw new ApiError(404, "User not found");
+  if (!user) {
+    authCounter.inc({ event: "profile_view", status: "failure" }, 1);
+    throw new ApiError(404, "User not found");
+  }
   const userData = {
     id: user._id,
     name: user.name,
     email: user.email,
   };
   res.status(200).json(new ApiResponse(200, "User profile", userData));
+  authCounter.inc({ event: "profile_view", status: "success" }, 1);
 });
 
 export const updateProfile = asyncHandler(async (req, res) => {
   const { name } = req.body;
-  if (!name) throw new ApiError(400, "Name is required");
+  if (!name) {
+    authCounter.inc({ event: "update_profile", status: "failure" }, 1);
+    throw new ApiError(400, "Name is required");
+  }
 
   const user = await User.findById(req.user.id);
-  if (!user) throw new ApiError(404, "User not found");
+  if (!user) {
+    authCounter.inc({ event: "update_profile", status: "failure" }, 1);
+    throw new ApiError(404, "User not found");
+  }
 
   user.name = name;
   await user.save();
@@ -274,15 +320,25 @@ export const updateProfile = asyncHandler(async (req, res) => {
   res
     .status(200)
     .json(new ApiResponse(200, "Profile updated successfully", user.name));
+  authCounter.inc({ event: "update_profile", status: "success" }, 1);
 });
 export const resendVerificationEmail = asyncHandler(async (req, res) => {
   const { email } = req.body;
-  if (!email) throw new ApiError(400, "Email is required");
+  if (!email) {
+    authCounter.inc({ event: "resend_verification", status: "failure" }, 1);
+    throw new ApiError(400, "Email is required");
+  }
 
   const user = await User.findOne({ email });
-  if (!user) throw new ApiError(404, "User not found");
+  if (!user) {
+    authCounter.inc({ event: "resend_verification", status: "failure" }, 1);
+    throw new ApiError(404, "User not found");
+  }
 
-  if (user.userVerified) throw new ApiError(400, "User already verified");
+  if (user.userVerified) {
+    authCounter.inc({ event: "resend_verification", status: "failure" }, 1);
+    throw new ApiError(400, "User already verified");
+  }
 
   const { token, hashedToken, tokenExpiry } = generateVerificationToken();
   user.emailVerificationToken = hashedToken;
@@ -298,6 +354,7 @@ export const resendVerificationEmail = asyncHandler(async (req, res) => {
   });
 
   res.status(200).json(new ApiResponse(200, "Verification email resent"));
+  authCounter.inc({ event: "resend_verification", status: "success" }, 1);
 });
 
 export const getLoginHistory = asyncHandler(async (req, res) => {
@@ -334,11 +391,15 @@ export const getLoginHistory = asyncHandler(async (req, res) => {
       },
     })
   );
+  authCounter.inc({ event: "login_history", status: "success" }, 1);
 });
 export const failedLoginAttempts = asyncHandler(async (req, res) => {
   const user = req.user?.email;
   console.log(user);
-  if (!user) throw new ApiError(400, "User email not found");
+  if (!user) {
+    authCounter.inc({ event: "failed_login_fetch", status: "failure" }, 1);
+    throw new ApiError(400, "User email not found");
+  }
   const attempts = await FailedLogin.find({ email: user }).sort({
     attemptedAt: -1,
   });
@@ -347,4 +408,5 @@ export const failedLoginAttempts = asyncHandler(async (req, res) => {
   res
     .status(200)
     .json(new ApiResponse(200, "Failed login attempts fetched", attempts));
+  authCounter.inc({ event: "failed_login_fetch", status: "success" }, 1);
 });
