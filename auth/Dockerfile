@@ -14,17 +14,15 @@ COPY . .
 
 FROM node:20-alpine AS runner
 WORKDIR /app
-
-RUN addgroup -S app && adduser -S app -G app
-
-RUN mkdir -p /app/logs && chown -R app:app /app
-
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
 
-USER app
-ENV NODE_ENV=production
+RUN addgroup -S app && adduser -S app -G app
+RUN mkdir -p /app/logs && chown -R app:app /app && chmod -R 750 /app/logs
+
 EXPOSE 8000
+
+USER app
 
 CMD ["node", "src/app.js"]
