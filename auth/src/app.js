@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import path from "path";
 import promClient from "prom-client";
 import {
   client as promClientInstance,
@@ -15,8 +16,42 @@ import cookieparser from "cookie-parser";
 import { asyncHandler } from "./utils/asynchandler.js";
 import { ApiResponse } from "./utils/apiResponse.js";
 
+// Swagger-related imports
+import swaggerJsdoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const app = express();
 await connectDB();
+
+// Swagger setup
+const swaggerOptions = {
+  definition: {
+    openapi: "3.0.0", // required for proper rendering
+    info: {
+      title: "Auth Service API",
+      version: "1.0.0",
+      description: "Authentication service API documentation",
+    },
+    servers: [
+      {
+        url: `${process.env.BASE_URL}:${process.env.PORT}`,
+        description: "Local development server",
+      },
+    ],
+  },
+  apis: [path.join(__dirname, "./routes/**/*.js")],
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
+// Use swagger-ui-express to serve the API docs
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",");
 const corsOptions = {
   origin: function (origin, callback) {
@@ -27,6 +62,7 @@ const corsOptions = {
   credentials: true,
   maxAge: 86400,
 };
+
 app.use(cookieparser());
 app.use(helmet());
 app.set("trust proxy", 1);
