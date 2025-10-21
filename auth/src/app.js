@@ -46,7 +46,10 @@ const swaggerOptions = {
   },
   apis: [path.join(__dirname, "./routes/**/*.js")],
 };
-
+app.get("/api-docs-json", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(swaggerSpec);
+});
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 // Use swagger-ui-express to serve the API docs

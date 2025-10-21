@@ -238,7 +238,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   user.passwordResetExpiry = tokenExpiry;
   await user.save();
 
-  const resetUrl = `${process.env.BASE_URL}/api/auth/reset-password/${token}`;
+  const resetUrl = `${process.env.RESET_PASSWORD_URL}/${token}`;
 
   await sendMail({
     email,
