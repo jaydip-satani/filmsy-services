@@ -13,6 +13,7 @@ import {
   getLoginHistory,
   resetPassword,
   failedLoginAttempts,
+  verifyTokenController,
 } from "../controllers/auth.controller.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
 import {
@@ -22,7 +23,6 @@ import {
 import { handleValidation } from "../middleware/validation.middleware.js";
 
 const router = express.Router();
-
 /**
  * @swagger
  * /api/auth/verify:
@@ -35,25 +35,7 @@ const router = express.Router();
  *       401:
  *         description: "Missing or invalid token"
  */
-router.post("/verify", async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) throw new ApiError(401, "Missing Authorization header");
-
-    const token = authHeader.split(" ")[1];
-    if (!token) throw new ApiError(401, "Missing token");
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    return new ApiResponse(res, 200, {
-      message: "Token verified successfully",
-      user: decoded,
-    });
-  } catch (err) {
-    console.error("Token verification failed:", err.message);
-    next(new ApiError(403, "Invalid or expired token"));
-  }
-});
+router.post("/verify", verifyTokenController);
 /**
  * @swagger
  * /api/auth/register:
