@@ -410,3 +410,23 @@ export const failedLoginAttempts = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, "Failed login attempts fetched", attempts));
   authCounter.inc({ event: "failed_login_fetch", status: "success" }, 1);
 });
+export const verifyTokenController = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader)
+      return res.status(401).json({ message: "Missing Authorization header" });
+
+    const token = authHeader.split(" ")[1];
+    if (!token) return res.status(401).json({ message: "Missing token" });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    return res.status(200).json({
+      message: "Token verified successfully",
+      user: decoded,
+    });
+  } catch (err) {
+    console.error("Token verification failed:", err.message);
+    return res.status(403).json({ message: "Invalid or expired token" });
+  }
+};
