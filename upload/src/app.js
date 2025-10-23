@@ -4,8 +4,11 @@ import cors from "cors";
 import helmet from "helmet";
 import uploadRoutes from "./routes/upload.route.js";
 import client, { httpRequestDuration } from "./utils/metrics.js";
+import connectDB from "./utils/db.js";
 
 const PORT = process.env.PORT;
+
+connectDB();
 
 const app = express();
 app.use(cors());
@@ -25,7 +28,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use("/api/upload", uploadRoutes);
+app.use("/api", uploadRoutes);
 
 app.get("/metrics", async (req, res) => {
   res.set("Content-Type", client.register.contentType);

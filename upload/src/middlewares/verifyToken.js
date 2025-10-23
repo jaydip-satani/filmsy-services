@@ -2,10 +2,6 @@ import axios from "axios";
 import { ApiError } from "../utils/apiError.js";
 import { asyncHandler } from "../utils/asynchandler.js";
 
-/**
- * Middleware to verify JWT token via Auth Service
- * Adds user info to req.user if verified
- */
 const verifyToken = asyncHandler(async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
@@ -28,12 +24,20 @@ const verifyToken = asyncHandler(async (req, res, next) => {
       }
     );
 
-    if (response.status === 200 && response.data.user) {
-      req.user = response.data.user;
+    const user = response.data?.user;
+
+    if (response.status === 200 && user) {
+      req.user = {
+        _id: user._id || user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role || "user",
+      };
+
       return next();
-    } else {
-      throw new ApiError(403, "Invalid token");
     }
+
+    throw new ApiError(403, "Invalid token");
   } catch (error) {
     console.error("Token verification failed:", error.message);
     throw new ApiError(403, "Unauthorized");
@@ -41,3 +45,4 @@ const verifyToken = asyncHandler(async (req, res, next) => {
 });
 
 export default verifyToken;
+``;
