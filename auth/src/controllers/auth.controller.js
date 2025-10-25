@@ -187,6 +187,7 @@ export const loginUser = asyncHandler(async (req, res) => {
     sameSite: "Strict",
     maxAge: 24 * 60 * 60 * 1000,
   });
+  authCounter.inc({ event: "login", status: "success" }, 1);
 
   return res.status(200).json(
     new ApiResponse(200, "Login successful", {
@@ -200,8 +201,6 @@ export const loginUser = asyncHandler(async (req, res) => {
       },
     })
   );
-  // metric
-  authCounter.inc({ event: "login", status: "success" }, 1);
 });
 
 export const logoutUser = asyncHandler(async (req, res) => {
@@ -296,6 +295,9 @@ export const profile = asyncHandler(async (req, res) => {
     id: user._id,
     name: user.name,
     email: user.email,
+    createdAt: user.createdAt,
+    lastLogin: user.lastLogin,
+    verified: user.userVerified,
   };
   res.status(200).json(new ApiResponse(200, "User profile", userData));
   authCounter.inc({ event: "profile_view", status: "success" }, 1);
