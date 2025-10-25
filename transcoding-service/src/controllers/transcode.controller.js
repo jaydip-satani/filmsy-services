@@ -5,7 +5,7 @@ import {
   downloadVideo,
   transcodeToMultiQualityHLSSafe,
 } from "../utils/ffmpeg.js";
-import { uploadHLSFolder } from "../utils/imagekit.js";
+import { uploadHLSFolderToFirebase } from "../utils/fire.js";
 import { logger } from "../utils/logger.js";
 import TranscodedVideo from "../models/transcode.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -37,7 +37,11 @@ export const processAndUploadVideo = async (video) => {
     logger.info(`Video transcoded: ${masterPlaylist}`);
 
     // 4️⃣ Upload all HLS files to ImageKit under video-specific folder
-    const uploadedFiles = await uploadHLSFolder(tempDir, video._id.toString());
+    // const uploadedFiles = await uploadHLSFolder(tempDir, video._id.toString());
+    const uploadedFiles = await uploadHLSFolderToFirebase(
+      tempDir,
+      video._id.toString()
+    );
 
     // Map uploaded playlist and chunks
     const playlistFileName = path.basename(masterPlaylist);
