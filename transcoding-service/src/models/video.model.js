@@ -1,12 +1,14 @@
 import mongoose from "mongoose";
+import { uploadDB } from "../utils/db.js";
 
 const videoSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
       ref: "User",
+      required: true,
     },
+    fileId: { type: String, required: true },
     fileName: String,
     url: String,
     thumbnail: String,
@@ -19,4 +21,4 @@ const videoSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("Video", videoSchema);
+export default uploadDB.model("Video", videoSchema);
