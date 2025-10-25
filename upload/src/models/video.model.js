@@ -7,10 +7,6 @@ const videoSchema = new mongoose.Schema(
       required: true,
       ref: "User",
     },
-    fileId: {
-      type: String,
-      required: true,
-    },
     fileName: String,
     url: String,
     thumbnail: String,
